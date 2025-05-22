@@ -215,10 +215,10 @@ impl NamedCustomDict {
     }
 }
 
-impl<'py> PythonizeNamedMappingType<'py> for NamedCustomDict {
-    type Builder = Bound<'py, NamedCustomDict>;
+impl PythonizeNamedMappingType for NamedCustomDict {
+    type Builder<'py> = Bound<'py, NamedCustomDict>;
 
-    fn builder(py: Python<'py>, len: usize, name: &'static str) -> PyResult<Self::Builder> {
+    fn builder<'py>(py: Python<'py>, len: usize, name: &'static str) -> PyResult<Self::Builder<'py>> {
         Bound::new(
             py,
             NamedCustomDict {
@@ -228,15 +228,15 @@ impl<'py> PythonizeNamedMappingType<'py> for NamedCustomDict {
         )
     }
 
-    fn push_field(
-        builder: &mut Self::Builder,
+    fn push_field<'py>(
+        builder: &mut Self::Builder<'py>,
         name: Bound<'py, pyo3::types::PyString>,
         value: Bound<'py, PyAny>,
     ) -> PyResult<()> {
         unsafe { builder.downcast_unchecked::<PyMapping>() }.set_item(name, value)
     }
 
-    fn finish(builder: Self::Builder) -> PyResult<Bound<'py, PyMapping>> {
+    fn finish<'py>(builder: Self::Builder<'py>) -> PyResult<Bound<'py, PyMapping>> {
         Ok(unsafe { builder.into_any().downcast_into_unchecked() })
     }
 }

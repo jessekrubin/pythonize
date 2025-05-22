@@ -9,7 +9,6 @@ use serde::{ser, Serialize};
 
 use crate::error::{PythonizeError, Result};
 
-// TODO: move 'py lifetime into builder once GATs are available in MSRV
 /// Trait for types which can represent a Python mapping
 pub trait PythonizeMappingType {
     /// Builder type for Python mappings
@@ -29,24 +28,27 @@ pub trait PythonizeMappingType {
     fn finish<'py>(builder: Self::Builder<'py>) -> PyResult<Bound<'py, PyMapping>>;
 }
 
-// TODO: move 'py lifetime into builder once GATs are available in MSRV
 /// Trait for types which can represent a Python mapping and have a name
-pub trait PythonizeNamedMappingType<'py> {
+pub trait PythonizeNamedMappingType {
     /// Builder type for Python mappings with a name
-    type Builder;
+    type Builder<'py>;
 
     /// Create a builder for a Python mapping with a name
-    fn builder(py: Python<'py>, len: usize, name: &'static str) -> PyResult<Self::Builder>;
+    fn builder<'py>(
+        py: Python<'py>,
+        len: usize,
+        name: &'static str,
+    ) -> PyResult<Self::Builder<'py>>;
 
     /// Adds the field to the named mapping being built
-    fn push_field(
-        builder: &mut Self::Builder,
+    fn push_field<'py>(
+        builder: &mut Self::Builder<'py>,
         name: Bound<'py, PyString>,
         value: Bound<'py, PyAny>,
     ) -> PyResult<()>;
 
     /// Build the Python mapping
-    fn finish(builder: Self::Builder) -> PyResult<Bound<'py, PyMapping>>;
+    fn finish<'py>(builder: Self::Builder<'py>) -> PyResult<Bound<'py, PyMapping>>;
 }
 
 /// Trait for types which can represent a Python sequence
@@ -61,13 +63,12 @@ pub trait PythonizeListType: Sized {
         U: ExactSizeIterator<Item = T>;
 }
 
-// TODO: remove 'py lifetime once GATs are available in MSRV
 /// Custom types for serialization
 pub trait PythonizeTypes<'py> {
     /// Python map type (should be representable as python mapping)
     type Map: PythonizeMappingType;
     /// Python (struct-like) named map type (should be representable as python mapping)
-    type NamedMap: PythonizeNamedMappingType<'py>;
+    type NamedMap: PythonizeNamedMappingType;
     /// Python sequence type (should be representable as python sequence)
     type List: PythonizeListType;
 }
@@ -104,24 +105,24 @@ pub struct PythonizeUnnamedMappingAdapter<'py, T: PythonizeMappingType> {
     _marker: PhantomData<&'py ()>,
 }
 
-impl<'py, T: PythonizeMappingType> PythonizeNamedMappingType<'py>
+impl<'py, T: PythonizeMappingType> PythonizeNamedMappingType
     for PythonizeUnnamedMappingAdapter<'py, T>
 {
-    type Builder = <T as PythonizeMappingType>::Builder<'py>;
+    type Builder<'a> = <T as PythonizeMappingType>::Builder<'a>;
 
-    fn builder(py: Python<'py>, len: usize, _name: &'static str) -> PyResult<Self::Builder> {
+    fn builder<'a>(py: Python<'a>, len: usize, _name: &'static str) -> PyResult<Self::Builder<'a>> {
         <T as PythonizeMappingType>::builder(py, Some(len))
     }
 
-    fn push_field(
-        builder: &mut Self::Builder,
-        name: Bound<'py, PyString>,
-        value: Bound<'py, PyAny>,
+    fn push_field<'a>(
+        builder: &mut Self::Builder<'a>,
+        name: Bound<'a, PyString>,
+        value: Bound<'a, PyAny>,
     ) -> PyResult<()> {
         <T as PythonizeMappingType>::push_item(builder, name.into_any(), value)
     }
 
-    fn finish(builder: Self::Builder) -> PyResult<Bound<'py, PyMapping>> {
+    fn finish<'a>(builder: Self::Builder<'a>) -> PyResult<Bound<'a, PyMapping>> {
         <T as PythonizeMappingType>::finish(builder)
     }
 }
@@ -230,7 +231,7 @@ pub struct PythonStructVariantSerializer<'py, P: PythonizeTypes<'py>> {
 #[doc(hidden)]
 pub struct PythonStructDictSerializer<'py, P: PythonizeTypes<'py>> {
     py: Python<'py>,
-    builder: <P::NamedMap as PythonizeNamedMappingType<'py>>::Builder,
+    builder: <P::NamedMap as PythonizeNamedMappingType>::Builder<'py>,
     _types: PhantomData<P>,
 }
 
